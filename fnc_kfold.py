@@ -1,5 +1,6 @@
 import sys
 import numpy as np
+import pandas as pd
 from sklearn.ensemble import GradientBoostingClassifier
 from feature_engineering import refuting_features, polarity_features, hand_features, gen_or_load_feats
 from feature_engineering import word_overlap_features
@@ -8,11 +9,12 @@ from utils.generate_test_splits import kfold_split, get_stances_for_folds
 from utils.score import report_score, LABELS, score_submission
 from utils.system import parse_params, check_version
 
-def generate_features(stances,dataset,name):
+def generate_features(stances,dataset,name,containStances=False):
     h, b, y = [],[],[]
 
     for stance in stances:
-        y.append(LABELS.index(stance['Stance']))
+        if(containStances):
+          y.append(LABELS.index(stance['Stance']))
         h.append(stance['Headline'])
         b.append(dataset.articles[stance['Body ID']])
 
@@ -30,21 +32,21 @@ if __name__ == "__main__":
 
     #Load the training dataset and generate folds
     d = DataSet()
-    #d = np.loadtxt(open(train_data(),'rb'))
+    d = np.loadtxt(open(train_data(),'rb'))
     folds,hold_out = kfold_split(d,n_folds=10)
     fold_stances, hold_out_stances = get_stances_for_folds(d,folds,hold_out)
 
     # Load the competition dataset
-    # competition_dataset = DataSet("competition_test")
-    # X_competition, y_competition = generate_features(competition_dataset.stances, competition_dataset, "competition")
+    competition_dataset = DataSet("competition_test")
+    X_competition, y_competition = generate_features(competition_dataset.stances, competition_dataset, "competition")
 
     Xs = dict()
     ys = dict()
 
     # Load/Precompute all features now
-    X_holdout,y_holdout = generate_features(hold_out_stances,d,"holdout")
+    X_holdout,y_holdout = generate_features(hold_out_stances,d,"holdout",True)
     for fold in fold_stances:
-        Xs[fold],ys[fold] = generate_features(fold_stances[fold],d,str(fold))
+        Xs[fold],ys[fold] = generate_features(fold_stances[fold],d,str(fold),True)
 
 
     best_score = 0
@@ -89,9 +91,12 @@ if __name__ == "__main__":
     print("")
     print("")
 
-    # #Run on competition dataset
-    # predicted = [LABELS[int(a)] for a in best_fold.predict(X_competition)]
-    # actual = [LABELS[int(a)] for a in y_competition]
-    #
-    # print("Scores on the test set")
-    # report_score(actual,predicted)
+    #Run on competition dataset
+    predicted = [LABELS[int(a)] for a in best_fold.predict(X_competition)]
+    head = []
+    body_ID = []
+    for index, i in enumerate(competition_dataset.stances):
+        head.append(i['Headline'])
+        body_ID.append(i['Body ID'])
+    dataframe = pd.DataFrame({'Headline': head, 'Body ID': body_ID, 'Stance': predicted[index]})
+    dataframe.to_csv('predictions.csv', index=False, encoding='utf-8')
